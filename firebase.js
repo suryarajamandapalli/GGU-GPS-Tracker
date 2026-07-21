@@ -1,14 +1,23 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getDatabase, ref, set, onValue, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { firebaseConfig } from "./config.js";
 
-// Initialize Firebase App & Realtime Database using Modular SDK
+// Initialize Firebase App, Database & Anonymous Auth
 let app;
 let db;
+let auth;
 
 try {
   app = initializeApp(firebaseConfig);
   db = getDatabase(app);
+  auth = getAuth(app);
+  
+  // Auto-authenticate anonymously to satisfy Firebase Security Rules
+  signInAnonymously(auth)
+    .then(() => console.log("✔ Firebase Anonymous Auth Signed In"))
+    .catch((err) => console.warn("⚠️ Anonymous Auth note:", err.message));
+
   console.log("✔ Firebase initialized successfully");
 } catch (err) {
   console.error("✖ Firebase initialization failed:", err);
@@ -20,6 +29,13 @@ export async function writeLiveGPS(data) {
     const error = new Error("Firebase DB not initialized");
     console.error("✖ writeLiveGPS error:", error);
     throw error;
+  }
+
+  // Ensure user is signed in if auth is enabled
+  if (auth && !auth.currentUser) {
+    try {
+      await signInAnonymously(auth);
+    } catch (e) {}
   }
 
   const gpsRef = ref(db, 'gps/live');
@@ -40,7 +56,7 @@ export async function writeLiveGPS(data) {
     console.log("✔ Firebase writeLiveGPS successful:", payload);
     return true;
   } catch (error) {
-    console.error("✖ Firebase writeLiveGPS failed (Permission Denied or Network Error):", error);
+    console.error("✖ Firebase writeLiveGPS failed:", error);
     throw error;
   }
 }
@@ -69,7 +85,7 @@ export function listenLiveGPS(onUpdate, onError) {
       }
     },
     (error) => {
-      console.error("✖ Firebase listenLiveGPS error (Permission Denied / Disconnected):", error);
+      console.error("✖ Firebase listenLiveGPS error:", error);
       if (onError) onError(error);
     }
   );
