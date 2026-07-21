@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GGU GPS OBS Overlay</title>
-    <meta name="description" content="Professional OBS Studio Live GPS Transparent Browser Source Overlay." />
+    <meta name="description" content="Minimal OBS Studio Live GPS Overlay." />
     <!-- Google Font Figtree -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -23,130 +23,110 @@
         color: #111111;
         font-family: 'Figtree', -apple-system, BlinkMacSystemFont, sans-serif;
         -webkit-font-smoothing: antialiased;
-        overflow: hidden;
       }
 
       #root {
         min-height: 100vh;
         display: flex;
-        flex-direction: column;
         justify-content: center;
         align-items: center;
-        padding: 32px 24px;
+        padding: 24px;
       }
 
       .container {
-        width: 100%;
-        max-width: 720px;
         display: flex;
         flex-direction: column;
         align-items: center;
-        text-align: center;
-        animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        animation: fadeIn 0.7s cubic-bezier(0.16, 1, 0.3, 1);
       }
 
-      .logo {
-        font-size: 56px;
-        font-weight: 900;
-        line-height: 1.1;
-        letter-spacing: -0.02em;
-        background: linear-gradient(135deg, #0F4CFF 0%, #D40000 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        margin-bottom: 32px;
+      /* 2-column layout with vertical divider */
+      .grid-wrapper {
+        display: flex;
+        align-items: stretch;
       }
 
-      .content-list {
+      .col {
         display: flex;
         flex-direction: column;
-        align-items: center;
-        width: 100%;
-        gap: 24px;
+        gap: 16px;
       }
 
-      .info-item {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        width: 100%;
-      }
+      .col-left  { align-items: flex-end;   padding-right: 20px; }
+      .col-right { align-items: flex-start; padding-left: 20px; border-left: 1.5px solid #e0e0e0; }
+
+      /* Each cell */
+      .cell { display: flex; flex-direction: column; gap: 2px; }
 
       .label {
-        font-size: 22px;
+        font-size: 13px;
         font-weight: 700;
-        line-height: 1.4;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
         color: #111111;
-        margin-bottom: 4px;
       }
 
       .value {
-        font-size: 22px;
-        font-weight: 400;
-        line-height: 1.5;
+        font-size: 24px;
+        font-weight: 700;
         color: #111111;
-        text-align: center;
-        max-width: 640px;
+        line-height: 1.2;
+        transition: color 0.15s ease;
+      }
+
+      /* Flash green briefly when coordinates update */
+      .value.updated {
+        color: #007A3D;
       }
 
       .status-message {
-        font-size: 24px;
+        font-size: 20px;
         font-weight: 700;
-        line-height: 1.5;
         color: #111111;
         text-align: center;
-        margin-top: 12px;
+        line-height: 1.6;
       }
 
       @keyframes fadeIn {
-        from {
-          opacity: 0;
-          transform: translateY(8px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
+        from { opacity: 0; transform: translateY(6px); }
+        to   { opacity: 1; transform: translateY(0); }
       }
     </style>
   </head>
   <body>
     <div id="root">
       <div class="container">
-        <h1 class="logo">GGU</h1>
-
         <div id="status-message" class="status-message">Waiting for Phone...</div>
 
-        <div id="content-list" class="content-list" style="display: none;">
-          <div class="info-item">
-            <div class="label">Place :</div>
-            <div id="address-val" class="value">--</div>
+        <div id="grid-content" class="grid-wrapper" style="display: none;">
+          <!-- Left: Lat / Long -->
+          <div class="col col-left">
+            <div class="cell">
+              <div class="label">Latitude</div>
+              <div id="lat-val" class="value">--</div>
+            </div>
+            <div class="cell">
+              <div class="label">Longitude</div>
+              <div id="lon-val" class="value">--</div>
+            </div>
           </div>
 
-          <div class="info-item">
-            <div class="label">Latitude :</div>
-            <div id="lat-val" class="value">--</div>
-          </div>
-
-          <div class="info-item">
-            <div class="label">Longitude :</div>
-            <div id="lon-val" class="value">--</div>
-          </div>
-
-          <div class="info-item">
-            <div class="label">Time :</div>
-            <div id="time-val" class="value">--</div>
-          </div>
-
-          <div class="info-item">
-            <div class="label">Date :</div>
-            <div id="date-val" class="value">--</div>
+          <!-- Right: Time / Date -->
+          <div class="col col-right">
+            <div class="cell">
+              <div class="label">Time</div>
+              <div id="time-val" class="value">--</div>
+            </div>
+            <div class="cell">
+              <div class="label">Date</div>
+              <div id="date-val" class="value">--</div>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- OBS OVERLAY MODULE SCRIPT -->
+    <!-- OBS OVERLAY REALTIME LISTENER MODULE -->
     <script type="module" src="./overlay.js"></script>
   </body>
 </html>
