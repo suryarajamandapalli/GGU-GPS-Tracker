@@ -22,16 +22,15 @@ function flashElement(ref) {
 }
 
 export default function App() {
-  const [lat, setLat] = useState(null);
-  const [lon, setLon] = useState(null);
+  const [lat, setLat] = useState(17.397251);
+  const [lon, setLon] = useState(78.413768);
   const [time, setTime] = useState(() => getTime(new Date()));
   const [date, setDate] = useState(() => getDate(new Date()));
   const [isLiveGPS, setIsLiveGPS] = useState(false);
-  const [loading, setLoading] = useState(true);
 
   const latRef = useRef(null);
   const lonRef = useRef(null);
-  const prevCoords = useRef({ lat: null, lon: null });
+  const prevCoords = useRef({ lat: 17.397251, lon: 78.413768 });
 
   // 1-second clock update
   useEffect(() => {
@@ -46,36 +45,50 @@ export default function App() {
   useEffect(() => {
     let isMounted = true;
 
-    // 1. Instant IP Location Fetch (No permission prompt required)
-    const fetchIPLocation = async () => {
+    // Multi-Tier Network IP Geolocation Fallback Chain
+    const loadIPLocation = async () => {
+      // Tier 1: ipwho.is
+      try {
+        const res = await fetch('https://ipwho.is/');
+        const data = await res.json();
+        if (isMounted && data && data.success && data.latitude && data.longitude) {
+          if (!isLiveGPS) {
+            setLat(data.latitude);
+            setLon(data.longitude);
+          }
+          return;
+        }
+      } catch (e) {}
+
+      // Tier 2: freeipapi.com
       try {
         const res = await fetch('https://freeipapi.com/api/json');
         const data = await res.json();
         if (isMounted && data && data.latitude && data.longitude) {
-          if (prevCoords.current.lat === null) {
+          if (!isLiveGPS) {
             setLat(data.latitude);
             setLon(data.longitude);
-            setLoading(false);
+          }
+          return;
+        }
+      } catch (e) {}
+
+      // Tier 3: ipapi.co
+      try {
+        const res = await fetch('https://ipapi.co/json/');
+        const data = await res.json();
+        if (isMounted && data && data.latitude && data.longitude) {
+          if (!isLiveGPS) {
+            setLat(data.latitude);
+            setLon(data.longitude);
           }
         }
-      } catch (e) {
-        try {
-          const res2 = await fetch('https://ipapi.co/json/');
-          const data2 = await res2.json();
-          if (isMounted && data2 && data2.latitude && data2.longitude) {
-            if (prevCoords.current.lat === null) {
-              setLat(data2.latitude);
-              setLon(data2.longitude);
-              setLoading(false);
-            }
-          }
-        } catch (err) {}
-      }
+      } catch (e) {}
     };
 
-    fetchIPLocation();
+    loadIPLocation();
 
-    // 2. Hardware GPS Movement Stream (Updates as device moves when allowed)
+    // Continuous Device Geolocation Watcher & Poller
     if (navigator.geolocation) {
       const updateGPSPosition = (position) => {
         if (!position || !position.coords) return;
@@ -91,7 +104,6 @@ export default function App() {
         setLat(newLat);
         setLon(newLon);
         setIsLiveGPS(true);
-        setLoading(false);
       };
 
       const options = {
@@ -100,6 +112,7 @@ export default function App() {
         timeout: 10000,
       };
 
+      navigator.geolocation.getCurrentPosition(updateGPSPosition, () => {}, options);
       const watchId = navigator.geolocation.watchPosition(updateGPSPosition, () => {}, options);
       const pollId = setInterval(() => {
         navigator.geolocation.getCurrentPosition(updateGPSPosition, () => {}, options);
@@ -116,14 +129,6 @@ export default function App() {
       isMounted = false;
     };
   }, []);
-
-  if (loading || lat === null) {
-    return (
-      <div className="container">
-        <div className="status-message">Loading location...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="container">
@@ -157,7 +162,7 @@ export default function App() {
 
       <div className="source-badge">
         <span className={`source-dot ${isLiveGPS ? 'gps' : ''}`}></span>
-        {isLiveGPS ? 'LIVE HARDWARE GPS MOVEMENT ACTIVE' : 'NETWORK IP LOCATION (ALLOW PERMISSION FOR LIVE MOVEMENT)'}
+        {isLiveGPS ? 'LIVE DEVICE GPS ACTIVE' : 'IP NETWORK LOCATION'}
       </div>
     </div>
   );
