@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GGU GPS Tracker</title>
-    <meta name="description" content="Live GPS tracking — real-time latitude, longitude, and time." />
+    <meta name="description" content="Live GPS tracking — real-time latitude, longitude, date, and time." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;700;900&display=swap" rel="stylesheet" />
@@ -69,50 +69,6 @@
         font-weight: 700;
         color: #111111;
         line-height: 1.2;
-        transition: color 0.15s ease;
-      }
-
-      /* Flash green briefly when values update */
-      .value.updated {
-        color: #007A3D;
-      }
-
-      .status-message {
-        font-size: 20px;
-        font-weight: 400;
-        color: #111111;
-        text-align: center;
-        line-height: 1.6;
-      }
-
-      /* Source Indicator */
-      .source-badge {
-        margin-top: 18px;
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: #111111;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-
-      .source-dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background-color: #00C853;
-      }
-
-      .source-dot.gps {
-        animation: pulse-dot 1.6s infinite cubic-bezier(0.66, 0, 0, 1);
-      }
-
-      @keyframes pulse-dot {
-        0%   { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(0,200,83,0.7); }
-        70%  { transform: scale(1.05); box-shadow: 0 0 0 6px rgba(0,200,83,0); }
-        100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(0,200,83,0); }
       }
 
       @keyframes fadeIn {
@@ -125,7 +81,7 @@
     <div id="root"></div>
 
     <script type="text/babel">
-      const { useState, useEffect, useRef } = React;
+      const { useState, useEffect } = React;
 
       const getTime = (d) => d.toLocaleString('en-US', {
         hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true,
@@ -135,23 +91,11 @@
         month: 'numeric', day: 'numeric', year: 'numeric',
       });
 
-      function flashElement(ref) {
-        if (!ref.current) return;
-        ref.current.classList.add('updated');
-        setTimeout(() => ref.current && ref.current.classList.remove('updated'), 300);
-      }
-
       function App() {
-        // Default initial coordinates (Hyderabad GGU area)
         const [lat, setLat] = useState(17.397251);
         const [lon, setLon] = useState(78.413768);
         const [time, setTime] = useState(() => getTime(new Date()));
         const [date, setDate] = useState(() => getDate(new Date()));
-        const [isLiveGPS, setIsLiveGPS] = useState(false);
-
-        const latRef = useRef(null);
-        const lonRef = useRef(null);
-        const prevCoords = useRef({ lat: 17.397251, lon: 78.413768 });
 
         // 1-second clock update
         useEffect(() => {
@@ -163,93 +107,43 @@
           return () => clearInterval(t);
         }, []);
 
+        // Silent Location Fetch (NO BROWSER PERMISSION PROMPT EVER)
         useEffect(() => {
           let isMounted = true;
 
-          // Multi-Tier Network IP Geolocation Fallback Chain
-          const loadIPLocation = async () => {
-            // Tier 1: ipwho.is (No CORS, HTTPS)
+          const fetchLocation = async () => {
             try {
               const res = await fetch('https://ipwho.is/');
               const data = await res.json();
               if (isMounted && data && data.success && data.latitude && data.longitude) {
-                if (!isLiveGPS) {
-                  setLat(data.latitude);
-                  setLon(data.longitude);
-                }
+                setLat(data.latitude);
+                setLon(data.longitude);
                 return;
               }
             } catch (e) {}
 
-            // Tier 2: freeipapi.com
             try {
-              const res = await fetch('https://freeipapi.com/api/json');
-              const data = await res.json();
-              if (isMounted && data && data.latitude && data.longitude) {
-                if (!isLiveGPS) {
-                  setLat(data.latitude);
-                  setLon(data.longitude);
-                }
+              const res2 = await fetch('https://freeipapi.com/api/json');
+              const data2 = await res2.json();
+              if (isMounted && data2 && data2.latitude && data2.longitude) {
+                setLat(data2.latitude);
+                setLon(data2.longitude);
                 return;
               }
             } catch (e) {}
 
-            // Tier 3: ipapi.co
             try {
-              const res = await fetch('https://ipapi.co/json/');
-              const data = await res.json();
-              if (isMounted && data && data.latitude && data.longitude) {
-                if (!isLiveGPS) {
-                  setLat(data.latitude);
-                  setLon(data.longitude);
-                }
+              const res3 = await fetch('https://ipapi.co/json/');
+              const data3 = await res3.json();
+              if (isMounted && data3 && data3.latitude && data3.longitude) {
+                setLat(data3.latitude);
+                setLon(data3.longitude);
+                return;
               }
             } catch (e) {}
           };
 
-          loadIPLocation();
-
-          // Continuous Device Geolocation Watcher & Poller
-          if (navigator.geolocation) {
-            const updateGPSPosition = (position) => {
-              if (!position || !position.coords) return;
-              const newLat = position.coords.latitude;
-              const newLon = position.coords.longitude;
-
-              if (prevCoords.current.lat !== newLat || prevCoords.current.lon !== newLon) {
-                prevCoords.current = { lat: newLat, lon: newLon };
-                flashElement(latRef);
-                flashElement(lonRef);
-              }
-
-              setLat(newLat);
-              setLon(newLon);
-              setIsLiveGPS(true);
-            };
-
-            const options = {
-              enableHighAccuracy: true,
-              maximumAge: 0,
-              timeout: 10000,
-            };
-
-            // Immediate single fetch
-            navigator.geolocation.getCurrentPosition(updateGPSPosition, () => {}, options);
-
-            // Continuous watcher
-            const watchId = navigator.geolocation.watchPosition(updateGPSPosition, () => {}, options);
-
-            // 1-second active poller
-            const pollId = setInterval(() => {
-              navigator.geolocation.getCurrentPosition(updateGPSPosition, () => {}, options);
-            }, 1000);
-
-            return () => {
-              isMounted = false;
-              navigator.geolocation.clearWatch(watchId);
-              clearInterval(pollId);
-            };
-          }
+          fetchLocation();
 
           return () => {
             isMounted = false;
@@ -263,11 +157,11 @@
               <div className="col col-left">
                 <div className="cell">
                   <div className="label">Latitude</div>
-                  <div className="value" ref={latRef}>{Number(lat).toFixed(6)}</div>
+                  <div className="value">{Number(lat).toFixed(6)}</div>
                 </div>
                 <div className="cell">
                   <div className="label">Longitude</div>
-                  <div className="value" ref={lonRef}>{Number(lon).toFixed(6)}</div>
+                  <div className="value">{Number(lon).toFixed(6)}</div>
                 </div>
               </div>
 
@@ -282,11 +176,6 @@
                   <div className="value">{date}</div>
                 </div>
               </div>
-            </div>
-
-            <div className="source-badge">
-              <span className={`source-dot ${isLiveGPS ? 'gps' : ''}`}></span>
-              {isLiveGPS ? 'LIVE DEVICE GPS ACTIVE' : 'IP NETWORK LOCATION'}
             </div>
           </div>
         );
