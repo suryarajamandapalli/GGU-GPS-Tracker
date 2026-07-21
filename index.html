@@ -44,7 +44,7 @@
       .col {
         display: flex;
         flex-direction: column;
-        gap: 16px;
+        gap: 12px;
       }
 
       .col-left  { align-items: flex-end;   padding-right: 18px; }
@@ -69,7 +69,7 @@
         transition: color 0.15s ease;
       }
 
-      /* Flash green briefly when coordinates change */
+      /* Flash green briefly when values update */
       .value.updated {
         color: #007A3D;
       }
@@ -113,14 +113,13 @@
         const [lon,  setLon]   = useState(null);
         const [time, setTime]  = useState(() => getTime(new Date()));
         const [date, setDate]  = useState(() => getDate(new Date()));
-        const [permErr, setPermErr] = useState(false);
         const [loading, setLoading] = useState(true);
 
         const latRef = useRef(null);
         const lonRef = useRef(null);
         const prevCoords = useRef({ lat: null, lon: null });
 
-        // 1-second clock
+        // 1-second clock update
         useEffect(() => {
           const t = setInterval(() => {
             const now = new Date();
@@ -130,71 +129,76 @@
           return () => clearInterval(t);
         }, []);
 
-        // Real-Time High-Frequency GPS Tracking System
+        // Auto-fetch location WITHOUT requiring browser permission prompt (using free HTTPS IP-Geolocation APIs)
         useEffect(() => {
-          if (!navigator.geolocation) {
-            setPermErr(true);
-            setLoading(false);
-            return;
+          let isMounted = true;
+
+          const fetchIPLocation = async () => {
+            try {
+              const res = await fetch('https://freeipapi.com/api/json');
+              const data = await res.json();
+              if (isMounted && data && data.latitude && data.longitude) {
+                setLat(data.latitude);
+                setLon(data.longitude);
+                setLoading(false);
+                return;
+              }
+            } catch (e) {
+              // Primary IP API failed, fallback to ipapi.co
+              try {
+                const res2 = await fetch('https://ipapi.co/json/');
+                const data2 = await res2.json();
+                if (isMounted && data2 && data2.latitude && data2.longitude) {
+                  setLat(data2.latitude);
+                  setLon(data2.longitude);
+                  setLoading(false);
+                  return;
+                }
+              } catch (err) {}
+            }
+          };
+
+          // Step 1: Immediate Instant IP Fetch (No permission modal required!)
+          fetchIPLocation();
+
+          // Step 2: Try passive browser geolocation update if already allowed
+          if (navigator.geolocation) {
+            const updatePosition = (position) => {
+              if (!position || !position.coords) return;
+              const newLat = position.coords.latitude;
+              const newLon = position.coords.longitude;
+
+              if (prevCoords.current.lat !== newLat || prevCoords.current.lon !== newLon) {
+                prevCoords.current = { lat: newLat, lon: newLon };
+                flashElement(latRef);
+                flashElement(lonRef);
+              }
+
+              setLat(newLat);
+              setLon(newLon);
+              setLoading(false);
+            };
+
+            const watchId = navigator.geolocation.watchPosition(updatePosition, () => {}, {
+              enableHighAccuracy: true,
+              maximumAge: 0,
+              timeout: 10000,
+            });
+
+            return () => {
+              isMounted = false;
+              navigator.geolocation.clearWatch(watchId);
+            };
           }
 
-          const options = {
-            enableHighAccuracy: true,
-            maximumAge: 0,
-            timeout: 10000,
-          };
-
-          const updatePosition = (position) => {
-            if (!position || !position.coords) return;
-            const newLat = position.coords.latitude;
-            const newLon = position.coords.longitude;
-
-            // Check if coordinates changed
-            if (prevCoords.current.lat !== newLat || prevCoords.current.lon !== newLon) {
-              prevCoords.current = { lat: newLat, lon: newLon };
-              flashElement(latRef);
-              flashElement(lonRef);
-            }
-
-            setLat(newLat);
-            setLon(newLon);
-            setLoading(false);
-            setPermErr(false);
-          };
-
-          const handleError = (err) => {
-            if (err.code === err.PERMISSION_DENIED) {
-              setPermErr(true);
-              setLoading(false);
-            }
-          };
-
-          // 1. Continuous Watcher
-          const watchId = navigator.geolocation.watchPosition(updatePosition, handleError, options);
-
-          // 2. Active High-Frequency 1-Second Polling Fallback to force real-time location stream
-          const pollInterval = setInterval(() => {
-            navigator.geolocation.getCurrentPosition(updatePosition, handleError, options);
-          }, 1000);
-
           return () => {
-            navigator.geolocation.clearWatch(watchId);
-            clearInterval(pollInterval);
+            isMounted = false;
           };
         }, []);
 
-        if (permErr) return (
-          <div className="container">
-            <div className="status-message">
-              Location permission denied.<br />
-              Please enable location access to continue.
-            </div>
-          </div>
-        );
-
         if (loading || lat === null) return (
           <div className="container">
-            <div className="status-message">Waiting for GPS signal...</div>
+            <div className="status-message">Loading location...</div>
           </div>
         );
 
@@ -205,11 +209,11 @@
               <div className="col col-left">
                 <div className="cell">
                   <div className="label">Latitude</div>
-                  <div className="value" ref={latRef}>{lat.toFixed(6)}</div>
+                  <div className="value" ref={latRef}>{Number(lat).toFixed(6)}</div>
                 </div>
                 <div className="cell">
                   <div className="label">Longitude</div>
-                  <div className="value" ref={lonRef}>{lon.toFixed(6)}</div>
+                  <div className="value" ref={lonRef}>{Number(lon).toFixed(6)}</div>
                 </div>
               </div>
 

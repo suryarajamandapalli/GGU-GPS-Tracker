@@ -1,165 +1,148 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const formatTime = (date) => {
-  return date.toLocaleString('en-US', {
-    month: 'numeric',
-    day: 'numeric',
-    year: 'numeric',
+const getTime = (d) =>
+  d.toLocaleString('en-US', {
     hour: 'numeric',
     minute: '2-digit',
     second: '2-digit',
     hour12: true,
   });
-};
+
+const getDate = (d) =>
+  d.toLocaleDateString('en-US', {
+    month: 'numeric',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
+function flashElement(ref) {
+  if (!ref.current) return;
+  ref.current.classList.add('updated');
+  setTimeout(() => ref.current && ref.current.classList.remove('updated'), 300);
+}
 
 export default function App() {
-  const [location, setLocation] = useState({ latitude: null, longitude: null });
-  const [address, setAddress] = useState('');
-  const [currentTime, setCurrentTime] = useState(() => formatTime(new Date()));
-  const [permissionError, setPermissionError] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [lat, setLat] = useState(null);
+  const [lon, setLon] = useState(null);
+  const [time, setTime] = useState(() => getTime(new Date()));
+  const [date, setDate] = useState(() => getDate(new Date()));
+  const [loading, setLoading] = useState(true);
 
-  const lastCoordsRef = useRef({ lat: null, lon: null });
+  const latRef = useRef(null);
+  const lonRef = useRef(null);
+  const prevCoords = useRef({ lat: null, lon: null });
 
-  // Time interval (updates every 1 second)
+  // 1-second clock update
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(formatTime(new Date()));
+    const t = setInterval(() => {
+      const now = new Date();
+      setTime(getTime(now));
+      setDate(getDate(now));
     }, 1000);
-    return () => clearInterval(timer);
+    return () => clearInterval(t);
   }, []);
 
-  // Real-time Geolocation Watcher with Maximum GPS Accuracy
+  // Auto-fetch location WITHOUT requiring browser permission prompt
   useEffect(() => {
-    if (!navigator.geolocation) {
-      setPermissionError(true);
-      setIsLoading(false);
-      return;
-    }
-
-    const options = {
-      enableHighAccuracy: true, // Forces precise GNSS/GPS hardware positioning
-      maximumAge: 0,            // Prevents returning cached location data
-      timeout: 15000,
-    };
-
-    const watchId = navigator.geolocation.watchPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        setLocation({ latitude, longitude });
-        setIsLoading(false);
-        setPermissionError(false);
-      },
-      (err) => {
-        setIsLoading(false);
-        if (err.code === err.PERMISSION_DENIED) {
-          setPermissionError(true);
-        }
-      },
-      options
-    );
-
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, []);
-
-  // OpenStreetMap Nominatim High-Precision Reverse Geocoding (zoom=18 for max detail)
-  useEffect(() => {
-    if (location.latitude === null || location.longitude === null) return;
-
-    // Avoid redundant network calls if coordinates haven't changed significantly (> 5 meters approx)
-    const prev = lastCoordsRef.current;
-    if (
-      prev.lat !== null &&
-      prev.lon !== null &&
-      Math.abs(prev.lat - location.latitude) < 0.00005 &&
-      Math.abs(prev.lon - location.longitude) < 0.00005
-    ) {
-      return;
-    }
-
-    lastCoordsRef.current = { lat: location.latitude, lon: location.longitude };
-
     let isMounted = true;
-    const fetchAddress = async () => {
+
+    const fetchIPLocation = async () => {
       try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${location.latitude}&lon=${location.longitude}&zoom=18&addressdetails=1`
-        );
-        if (!res.ok) throw new Error('Geocoding request failed');
+        const res = await fetch('https://freeipapi.com/api/json');
         const data = await res.json();
-        if (isMounted && data && data.display_name) {
-          setAddress(data.display_name);
+        if (isMounted && data && data.latitude && data.longitude) {
+          setLat(data.latitude);
+          setLon(data.longitude);
+          setLoading(false);
+          return;
         }
       } catch (e) {
-        if (isMounted && !address) {
-          setAddress('Address unavailable');
-        }
+        try {
+          const res2 = await fetch('https://ipapi.co/json/');
+          const data2 = await res2.json();
+          if (isMounted && data2 && data2.latitude && data2.longitude) {
+            setLat(data2.latitude);
+            setLon(data2.longitude);
+            setLoading(false);
+            return;
+          }
+        } catch (err) {}
       }
     };
 
-    fetchAddress();
+    fetchIPLocation();
+
+    if (navigator.geolocation) {
+      const updatePosition = (position) => {
+        if (!position || !position.coords) return;
+        const newLat = position.coords.latitude;
+        const newLon = position.coords.longitude;
+
+        if (prevCoords.current.lat !== newLat || prevCoords.current.lon !== newLon) {
+          prevCoords.current = { lat: newLat, lon: newLon };
+          flashElement(latRef);
+          flashElement(lonRef);
+        }
+
+        setLat(newLat);
+        setLon(newLon);
+        setLoading(false);
+      };
+
+      const watchId = navigator.geolocation.watchPosition(updatePosition, () => {}, {
+        enableHighAccuracy: true,
+        maximumAge: 0,
+        timeout: 10000,
+      });
+
+      return () => {
+        isMounted = false;
+        navigator.geolocation.clearWatch(watchId);
+      };
+    }
 
     return () => {
       isMounted = false;
     };
-  }, [location.latitude, location.longitude]);
+  }, []);
+
+  if (loading || lat === null) {
+    return (
+      <div className="container">
+        <div className="status-message">Loading location...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="container">
-      {/* Top Header with Logo on Left and Live Badge on Right */}
-      <div className="header-row">
-        <div className="logo-brand">
-          <div className="logo-top-row">
-            <span className="logo-title">GGU</span>
-            <svg className="logo-cap-icon" viewBox="0 0 64 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M32 4L4 18L32 32L60 18L32 4Z" fill="#1A1A1A"/>
-              <path d="M14 26.5V36.5C14 36.5 22 43 32 43C42 43 50 36.5 50 36.5V26.5L32 35L14 26.5Z" fill="#1A1A1A"/>
-              <path d="M57 20V36H59V20H57Z" fill="#1A1A1A"/>
-              <circle cx="58" cy="38" r="2.5" fill="#1A1A1A"/>
-            </svg>
-          </div>
-          <div className="logo-divider"></div>
-          <div className="logo-subtitle">GODAVARI GLOBAL UNIVERSITY</div>
-        </div>
-
-        <div className="live-badge">
-          <span className="live-dot"></span>
-          <span className="live-label">LIVE</span>
-        </div>
-      </div>
-
-      {permissionError ? (
-        <div className="status-message">
-          Location permission denied.
-          <br />
-          Please enable location access to continue.
-        </div>
-      ) : isLoading || location.latitude === null ? (
-        <div className="status-message">Waiting for GPS signal...</div>
-      ) : (
-        <div className="content-list">
-          <div className="info-item">
-            <div className="label">Place :</div>
-            <div className="value">{address || 'Fetching address...'}</div>
-          </div>
-
-          {/* Latitude & Longitude in one single line */}
-          <div className="info-item">
-            <div className="lat-long-row">
-              <span className="label">Latitude :</span>
-              <span className="value">{location.latitude.toFixed(6)}</span>
-              <span className="lat-long-spacer"></span>
-              <span className="label">Longitude :</span>
-              <span className="value">{location.longitude.toFixed(6)}</span>
+      <div className="grid-wrapper">
+        <div className="col col-left">
+          <div className="cell">
+            <div className="label">Latitude</div>
+            <div className="value" ref={latRef}>
+              {Number(lat).toFixed(6)}
             </div>
           </div>
-
-          <div className="info-item">
-            <div className="label">Time :</div>
-            <div className="value">{currentTime}</div>
+          <div className="cell">
+            <div className="label">Longitude</div>
+            <div className="value" ref={lonRef}>
+              {Number(lon).toFixed(6)}
+            </div>
           </div>
         </div>
-      )}
+
+        <div className="col col-right">
+          <div className="cell">
+            <div className="label">Time</div>
+            <div className="value">{time}</div>
+          </div>
+          <div className="cell">
+            <div className="label">Date</div>
+            <div className="value">{date}</div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
