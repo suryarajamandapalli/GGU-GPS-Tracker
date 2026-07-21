@@ -7,24 +7,42 @@ class PhoneTransmitter {
     this.lonEl = document.getElementById('lon');
     this.addressEl = document.getElementById('address');
     this.accuracyEl = document.getElementById('accuracy');
+    this.btnStart = document.getElementById('btn-start');
+    this.btnStop = document.getElementById('btn-stop');
 
+    this.watchId = null;
+    this.isStreaming = false;
     this.lastUploadTime = 0;
     this.cachedAddress = '';
     this.lastGeocodeCoords = { lat: null, lon: null };
 
-    this.initGPS();
+    this.bindEvents();
+    // Auto-start streaming on page load for immediate usability
+    this.startStreaming();
   }
 
-  initGPS() {
+  bindEvents() {
+    if (this.btnStart) {
+      this.btnStart.addEventListener('click', () => this.startStreaming());
+    }
+    if (this.btnStop) {
+      this.btnStop.addEventListener('click', () => this.stopStreaming());
+    }
+  }
+
+  startStreaming() {
+    if (this.isStreaming) return;
+
     if (!navigator.geolocation) {
-      const err = new Error("Geolocation API not supported by browser");
-      console.error("✖ GPS Error:", err);
       this.setStatus("Geolocation API not supported by browser", "error");
       return;
     }
 
-    this.setStatus("Requesting GPS permission on phone...", "pending");
-    console.log("✔ Requesting GPS permission on phone...");
+    this.isStreaming = true;
+    if (this.btnStart) this.btnStart.disabled = true;
+    if (this.btnStop) this.btnStop.disabled = false;
+
+    this.setStatus("Requesting GPS permission...", "pending");
 
     const options = {
       enableHighAccuracy: true,
@@ -32,14 +50,31 @@ class PhoneTransmitter {
       timeout: 10000
     };
 
-    navigator.geolocation.watchPosition(
+    this.watchId = navigator.geolocation.watchPosition(
       (pos) => this.handleGPSUpdate(pos),
       (err) => this.handleGPSError(err),
       options
     );
   }
 
+  stopStreaming() {
+    if (!this.isStreaming) return;
+
+    if (this.watchId !== null) {
+      navigator.geolocation.clearWatch(this.watchId);
+      this.watchId = null;
+    }
+
+    this.isStreaming = false;
+    if (this.btnStart) this.btnStart.disabled = false;
+    if (this.btnStop) this.btnStop.disabled = true;
+
+    this.setStatus("Streaming Stopped (Paused)", "stopped");
+  }
+
   async handleGPSUpdate(position) {
+    if (!this.isStreaming) return;
+
     const now = Date.now();
 
     // Throttle uploads to ~1 update per second
@@ -64,17 +99,14 @@ class PhoneTransmitter {
       year: 'numeric'
     });
 
-    // Update Phone Screen UI
     if (this.latEl) this.latEl.textContent = latitude.toFixed(6);
     if (this.lonEl) this.lonEl.textContent = longitude.toFixed(6);
     if (this.accuracyEl) this.accuracyEl.textContent = `±${Math.round(accuracy)} m`;
 
-    // Trigger Non-Blocking Reverse Geocoding (Nominatim failure will NEVER block Firebase upload)
     this.fetchAddressAsync(latitude, longitude);
 
-    this.addressEl.textContent = this.cachedAddress || 'Location active';
+    if (this.addressEl) this.addressEl.textContent = this.cachedAddress || 'Location active';
 
-    // Immediate Firebase Upload to `gps/live`
     try {
       await writeLiveGPS({
         latitude,
@@ -92,7 +124,6 @@ class PhoneTransmitter {
     }
   }
 
-  // Asynchronous non-blocking reverse geocoding
   fetchAddressAsync(lat, lon) {
     if (
       this.lastGeocodeCoords.lat === null ||
@@ -109,7 +140,7 @@ class PhoneTransmitter {
           }
         })
         .catch((e) => {
-          console.warn("⚠️ Nominatim reverse geocode failed (non-blocking):", e);
+          console.warn("⚠️ Reverse geocode non-blocking exception:", e);
         });
     }
   }
@@ -118,8 +149,9 @@ class PhoneTransmitter {
     console.error("✖ GPS Watch Error:", err);
     if (err.code === err.PERMISSION_DENIED) {
       this.setStatus("Location permission denied on phone.", "error");
+      this.stopStreaming();
     } else {
-      this.setStatus("Waiting for GPS signal... Retrying...", "pending");
+      this.setStatus("Waiting for GPS signal...", "pending");
     }
   }
 
