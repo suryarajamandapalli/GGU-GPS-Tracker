@@ -1,0 +1,208 @@
+/* CSS Reset & Global Styling */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  background-color: #ffffff;
+  color: #111111;
+  font-family: 'Figtree', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 32px 24px;
+}
+
+.container {
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Header Row: Logo Left, Live Button Right */
+.header-row {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 48px;
+}
+
+/* Godavari Global University Resembled Logo */
+.logo-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 0;
+  width: fit-content;
+}
+
+.logo-top-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 8px;
+  position: relative;
+}
+
+.logo-title {
+  font-size: 68px;
+  font-weight: 900;
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+  background: linear-gradient(90deg, #3B1C71 0%, #A61D4C 45%, #E51A24 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-family: 'Figtree', sans-serif;
+}
+
+.logo-cap-icon {
+  width: 40px;
+  height: 30px;
+  margin-bottom: 4px;
+}
+
+.logo-divider {
+  width: 100%;
+  height: 2.5px;
+  background-color: #1a1a1a;
+  margin-top: 4px;
+  margin-bottom: 6px;
+}
+
+.logo-subtitle {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: #1a1a1a;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Live Blinking Indicator */
+.live-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #FAFAFA;
+  padding: 8px 16px;
+  border-radius: 20px;
+}
+
+.live-dot {
+  width: 10px;
+  height: 10px;
+  background-color: #E51A24;
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 0 0 0 rgba(229, 26, 36, 0.6);
+  animation: pulse-dot 1.6s infinite cubic-bezier(0.66, 0, 0, 1);
+}
+
+.live-label {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #E51A24;
+  text-transform: uppercase;
+}
+
+@keyframes pulse-dot {
+  0% {
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 rgba(229, 26, 36, 0.7);
+    opacity: 1;
+  }
+  70% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 10px rgba(229, 26, 36, 0);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 rgba(229, 26, 36, 0);
+    opacity: 1;
+  }
+}
+
+/* Content Information */
+.content-list {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  gap: 32px;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.label {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #111111;
+  margin-bottom: 4px;
+}
+
+.value {
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #111111;
+  text-align: center;
+  max-width: 640px;
+}
+
+/* Single line for Latitude and Longitude */
+.lat-long-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.lat-long-spacer {
+  width: 24px;
+}
+
+.status-message {
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #111111;
+  text-align: center;
+  margin-top: 12px;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
