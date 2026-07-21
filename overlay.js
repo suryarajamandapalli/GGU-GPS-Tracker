@@ -17,19 +17,27 @@ class OBSOverlay {
   }
 
   initRealtimeListener() {
-    console.log("✔ OBS Overlay connecting to Firebase realtime listener on gps/live...");
+    console.log("✔ OBS Overlay connecting to Firebase realtime listener on path: gps/live");
 
     listenLiveGPS(
       (data) => {
         if (!data || data.latitude === undefined || data.longitude === undefined) {
-          console.log("⚠️ No active GPS data on gps/live node");
+          console.warn("⚠️ Node gps/live has no valid coordinates yet");
           this.showStatus('Waiting for Phone...');
           return;
         }
 
-        this.lastReceivedTimestamp = data.timestamp || Date.now();
+        // Record exact local receipt time to avoid clock-skew false offline states
+        this.lastReceivedTimestamp = Date.now();
+        console.log("✔ [REALTIME RECEIVED] Data on path gps/live:", {
+          latitude: data.latitude,
+          longitude: data.longitude,
+          time: data.time,
+          date: data.date,
+          localReceiptTime: new Date(this.lastReceivedTimestamp).toLocaleTimeString()
+        });
 
-        // Update 2x2 grid values in realtime
+        // Update 2x2 grid values in sub-second realtime
         if (this.latEl) this.latEl.textContent = Number(data.latitude).toFixed(6);
         if (this.lonEl) this.lonEl.textContent = Number(data.longitude).toFixed(6);
         if (this.timeEl) this.timeEl.textContent = data.time || '--';
@@ -38,21 +46,23 @@ class OBSOverlay {
         this.showGrid();
       },
       (error) => {
-        console.error('✖ OBS Overlay Firebase Listener Error:', error);
+        console.error('✖ OBS Overlay Firebase Listener Error on path gps/live:', error);
         this.showStatus('Connection Lost');
       }
     );
   }
 
   initStaleCheck() {
+    // Only mark Phone Offline if NO update has been received for > 15 seconds
     setInterval(() => {
       if (this.lastReceivedTimestamp > 0) {
         const diff = Date.now() - this.lastReceivedTimestamp;
-        if (diff > 12000) {
+        if (diff > 15000) {
+          console.warn(`⚠️ Offline trigger: No update received for ${Math.round(diff/1000)}s (>15s limit)`);
           this.showStatus('Phone Offline');
         }
       }
-    }, 3000);
+    }, 1000);
   }
 
   showStatus(message) {

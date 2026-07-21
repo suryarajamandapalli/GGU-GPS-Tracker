@@ -17,7 +17,6 @@ class PhoneTransmitter {
     this.lastGeocodeCoords = { lat: null, lon: null };
 
     this.bindEvents();
-    // Auto-start streaming on page load for immediate usability
     this.startStreaming();
   }
 
@@ -43,6 +42,7 @@ class PhoneTransmitter {
     if (this.btnStop) this.btnStop.disabled = false;
 
     this.setStatus("Requesting GPS permission...", "pending");
+    console.log("✔ [PHONE] Requesting GPS hardware stream...");
 
     const options = {
       enableHighAccuracy: true,
@@ -70,6 +70,7 @@ class PhoneTransmitter {
     if (this.btnStop) this.btnStop.disabled = true;
 
     this.setStatus("Streaming Stopped (Paused)", "stopped");
+    console.log("⚠️ [PHONE] Streaming stopped by user");
   }
 
   async handleGPSUpdate(position) {
@@ -108,6 +109,7 @@ class PhoneTransmitter {
     if (this.addressEl) this.addressEl.textContent = this.cachedAddress || 'Location active';
 
     try {
+      console.log(`✔ [PHONE WRITE] Pushing coordinates to path gps/live: lat=${latitude}, lon=${longitude}`);
       await writeLiveGPS({
         latitude,
         longitude,
@@ -119,7 +121,7 @@ class PhoneTransmitter {
       });
       this.setStatus("Live streaming to OBS via Firebase...", "active");
     } catch (err) {
-      console.error("✖ Firebase Upload Error:", err);
+      console.error("✖ [PHONE WRITE ERROR] Firebase set() failed on path gps/live:", err);
       this.setStatus(`Firebase Write Failed: ${err.message}`, "error");
     }
   }
@@ -146,7 +148,7 @@ class PhoneTransmitter {
   }
 
   handleGPSError(err) {
-    console.error("✖ GPS Watch Error:", err);
+    console.error("✖ [PHONE GPS ERROR]:", err);
     if (err.code === err.PERMISSION_DENIED) {
       this.setStatus("Location permission denied on phone.", "error");
       this.stopStreaming();
