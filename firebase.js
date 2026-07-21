@@ -1,56 +1,78 @@
-import { firebaseConfig } from './config.js';
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { getDatabase, ref, set, onValue, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+import { firebaseConfig } from "./config.js";
 
-class FirebaseGPSService {
-  constructor() {
-    this.db = null;
-    this.init();
+// Initialize Firebase App & Realtime Database using Modular SDK
+let app;
+let db;
+
+try {
+  app = initializeApp(firebaseConfig);
+  db = getDatabase(app);
+  console.log("✔ Firebase initialized successfully");
+} catch (err) {
+  console.error("✖ Firebase initialization failed:", err);
+}
+
+// Write to exact path: `gps/live`
+export async function writeLiveGPS(data) {
+  if (!db) {
+    const error = new Error("Firebase DB not initialized");
+    console.error("✖ writeLiveGPS error:", error);
+    throw error;
   }
 
-  init() {
-    if (window.firebase) {
-      if (!window.firebase.apps.length) {
-        window.firebase.initializeApp(firebaseConfig);
-      }
-      this.db = window.firebase.database();
-    }
-  }
+  const gpsRef = ref(db, 'gps/live');
 
-  // Write live GPS payload under `gps/live` node
-  async writeLiveGPS(data) {
-    if (!this.db) this.init();
-    if (!this.db) throw new Error("Firebase DB not initialized");
+  const payload = {
+    latitude: Number(data.latitude),
+    longitude: Number(data.longitude),
+    address: data.address || "",
+    accuracy: Number(data.accuracy || 0),
+    date: data.date || "",
+    time: data.time || "",
+    timestamp: data.timestamp || Date.now(),
+    lastUpdated: serverTimestamp()
+  };
 
-    const payload = {
-      latitude: Number(data.latitude),
-      longitude: Number(data.longitude),
-      address: data.address || "",
-      accuracy: Number(data.accuracy || 0),
-      date: data.date,
-      time: data.time,
-      timestamp: data.timestamp || Date.now(),
-      lastUpdated: window.firebase.database.ServerValue.TIMESTAMP
-    };
-
-    return this.db.ref('gps/live').set(payload);
-  }
-
-  // Realtime subscription to `gps/live` node for OBS Overlay
-  listenLiveGPS(onUpdate, onError) {
-    if (!this.db) this.init();
-    if (!this.db) {
-      if (onError) onError(new Error("Firebase unavailable"));
-      return () => {};
-    }
-
-    const liveRef = this.db.ref('gps/live');
-    const handleValue = (snapshot) => {
-      onUpdate(snapshot.exists() ? snapshot.val() : null);
-    };
-
-    liveRef.on('value', handleValue, onError);
-
-    return () => liveRef.off('value', handleValue);
+  try {
+    await set(gpsRef, payload);
+    console.log("✔ Firebase writeLiveGPS successful:", payload);
+    return true;
+  } catch (error) {
+    console.error("✖ Firebase writeLiveGPS failed (Permission Denied or Network Error):", error);
+    throw error;
   }
 }
 
-export const gpsService = new FirebaseGPSService();
+// Realtime subscription on exact path: `gps/live`
+export function listenLiveGPS(onUpdate, onError) {
+  if (!db) {
+    const error = new Error("Firebase DB not initialized");
+    console.error("✖ listenLiveGPS error:", error);
+    if (onError) onError(error);
+    return () => {};
+  }
+
+  const gpsRef = ref(db, 'gps/live');
+
+  const unsubscribe = onValue(
+    gpsRef,
+    (snapshot) => {
+      if (snapshot.exists()) {
+        const val = snapshot.val();
+        console.log("✔ Firebase realtime update received on gps/live:", val);
+        onUpdate(val);
+      } else {
+        console.warn("⚠️ Firebase node gps/live does not exist yet");
+        onUpdate(null);
+      }
+    },
+    (error) => {
+      console.error("✖ Firebase listenLiveGPS error (Permission Denied / Disconnected):", error);
+      if (onError) onError(error);
+    }
+  );
+
+  return unsubscribe;
+}

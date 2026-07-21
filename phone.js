@@ -1,4 +1,4 @@
-import { gpsService } from './firebase.js';
+import { writeLiveGPS } from './firebase.js';
 
 class PhoneTransmitter {
   constructor() {
@@ -17,11 +17,14 @@ class PhoneTransmitter {
 
   initGPS() {
     if (!navigator.geolocation) {
-      this.setStatus('Geolocation not supported by browser', 'error');
+      const err = new Error("Geolocation API not supported by browser");
+      console.error("✖ GPS Error:", err);
+      this.setStatus("Geolocation API not supported by browser", "error");
       return;
     }
 
-    this.setStatus('Requesting GPS permission on phone...', 'pending');
+    this.setStatus("Requesting GPS permission on phone...", "pending");
+    console.log("✔ Requesting GPS permission on phone...");
 
     const options = {
       enableHighAccuracy: true,
@@ -29,7 +32,6 @@ class PhoneTransmitter {
       timeout: 10000
     };
 
-    // Watch continuously
     navigator.geolocation.watchPosition(
       (pos) => this.handleGPSUpdate(pos),
       (err) => this.handleGPSError(err),
@@ -39,8 +41,8 @@ class PhoneTransmitter {
 
   async handleGPSUpdate(position) {
     const now = Date.now();
-    
-    // Throttle uploads to approx 1 update per second
+
+    // Throttle uploads to ~1 update per second
     if (now - this.lastUploadTime < 950) {
       return;
     }
@@ -62,26 +64,19 @@ class PhoneTransmitter {
       year: 'numeric'
     });
 
-    // Update Phone UI
-    this.latEl.textContent = latitude.toFixed(6);
-    this.lonEl.textContent = longitude.toFixed(6);
-    this.accuracyEl.textContent = `±${Math.round(accuracy)} m`;
+    // Update Phone Screen UI
+    if (this.latEl) this.latEl.textContent = latitude.toFixed(6);
+    if (this.lonEl) this.lonEl.textContent = longitude.toFixed(6);
+    if (this.accuracyEl) this.accuracyEl.textContent = `±${Math.round(accuracy)} m`;
 
-    // Reverse Geocode if coordinates moved significantly (> ~5 meters)
-    if (
-      this.lastGeocodeCoords.lat === null ||
-      Math.abs(this.lastGeocodeCoords.lat - latitude) > 0.00005 ||
-      Math.abs(this.lastGeocodeCoords.lon - longitude) > 0.00005
-    ) {
-      this.lastGeocodeCoords = { lat: latitude, lon: longitude };
-      this.cachedAddress = await this.reverseGeocode(latitude, longitude);
-    }
+    // Trigger Non-Blocking Reverse Geocoding (Nominatim failure will NEVER block Firebase upload)
+    this.fetchAddressAsync(latitude, longitude);
 
     this.addressEl.textContent = this.cachedAddress || 'Location active';
 
-    // Upload to Firebase gps/live node immediately
+    // Immediate Firebase Upload to `gps/live`
     try {
-      await gpsService.writeLiveGPS({
+      await writeLiveGPS({
         latitude,
         longitude,
         accuracy,
@@ -90,36 +85,49 @@ class PhoneTransmitter {
         time: localTimeStr,
         timestamp: now
       });
-      this.setStatus('Broadcasting live to OBS via Firebase...', 'active');
+      this.setStatus("Live streaming to OBS via Firebase...", "active");
     } catch (err) {
-      this.setStatus('Firebase Connection Lost - Retrying...', 'pending');
+      console.error("✖ Firebase Upload Error:", err);
+      this.setStatus(`Firebase Write Failed: ${err.message}`, "error");
     }
   }
 
-  async reverseGeocode(lat, lon) {
-    try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=18`
-      );
-      if (!res.ok) return this.cachedAddress || '';
-      const data = await res.json();
-      return data.display_name || '';
-    } catch (e) {
-      return this.cachedAddress || '';
+  // Asynchronous non-blocking reverse geocoding
+  fetchAddressAsync(lat, lon) {
+    if (
+      this.lastGeocodeCoords.lat === null ||
+      Math.abs(this.lastGeocodeCoords.lat - lat) > 0.00005 ||
+      Math.abs(this.lastGeocodeCoords.lon - lon) > 0.00005
+    ) {
+      this.lastGeocodeCoords = { lat, lon };
+      fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&zoom=18`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && data.display_name) {
+            this.cachedAddress = data.display_name;
+            if (this.addressEl) this.addressEl.textContent = this.cachedAddress;
+          }
+        })
+        .catch((e) => {
+          console.warn("⚠️ Nominatim reverse geocode failed (non-blocking):", e);
+        });
     }
   }
 
   handleGPSError(err) {
+    console.error("✖ GPS Watch Error:", err);
     if (err.code === err.PERMISSION_DENIED) {
-      this.setStatus('Location permission denied on phone.', 'error');
+      this.setStatus("Location permission denied on phone.", "error");
     } else {
-      this.setStatus('Waiting for GPS signal... Retrying...', 'pending');
+      this.setStatus("Waiting for GPS signal... Retrying...", "pending");
     }
   }
 
   setStatus(message, type) {
-    this.statusEl.textContent = message;
-    this.statusEl.className = 'status ' + type;
+    if (this.statusEl) {
+      this.statusEl.textContent = message;
+      this.statusEl.className = 'status ' + type;
+    }
   }
 }
 
