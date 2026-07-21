@@ -8,15 +8,16 @@ class PhoneTransmitter {
     this.addressEl = document.getElementById('address');
     this.accuracyEl = document.getElementById('accuracy');
 
-    this.lastCoords = { lat: null, lon: null };
+    this.lastUploadTime = 0;
     this.cachedAddress = '';
+    this.lastGeocodeCoords = { lat: null, lon: null };
 
-    this.init();
+    this.initGPS();
   }
 
-  init() {
+  initGPS() {
     if (!navigator.geolocation) {
-      this.setStatus('Geolocation is not supported by your browser.', 'error');
+      this.setStatus('Geolocation not supported by browser', 'error');
       return;
     }
 
@@ -28,45 +29,70 @@ class PhoneTransmitter {
       timeout: 10000
     };
 
+    // Watch continuously
     navigator.geolocation.watchPosition(
-      (pos) => this.handleLocationUpdate(pos),
-      (err) => this.handleLocationError(err),
+      (pos) => this.handleGPSUpdate(pos),
+      (err) => this.handleGPSError(err),
       options
     );
   }
 
-  async handleLocationUpdate(position) {
-    const { latitude, longitude, accuracy, speed } = position.coords;
+  async handleGPSUpdate(position) {
+    const now = Date.now();
+    
+    // Throttle uploads to approx 1 update per second
+    if (now - this.lastUploadTime < 950) {
+      return;
+    }
+    this.lastUploadTime = now;
 
+    const { latitude, longitude, accuracy } = position.coords;
+    const dateObj = new Date();
+
+    const localTimeStr = dateObj.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+
+    const localDateStr = dateObj.toLocaleDateString('en-US', {
+      month: 'numeric',
+      day: 'numeric',
+      year: 'numeric'
+    });
+
+    // Update Phone UI
     this.latEl.textContent = latitude.toFixed(6);
     this.lonEl.textContent = longitude.toFixed(6);
     this.accuracyEl.textContent = `±${Math.round(accuracy)} m`;
 
-    // Fetch Reverse Geocoded Address if coordinates changed significantly
+    // Reverse Geocode if coordinates moved significantly (> ~5 meters)
     if (
-      this.lastCoords.lat === null ||
-      Math.abs(this.lastCoords.lat - latitude) > 0.00005 ||
-      Math.abs(this.lastCoords.lon - longitude) > 0.00005
+      this.lastGeocodeCoords.lat === null ||
+      Math.abs(this.lastGeocodeCoords.lat - latitude) > 0.00005 ||
+      Math.abs(this.lastGeocodeCoords.lon - longitude) > 0.00005
     ) {
-      this.lastCoords = { lat: latitude, lon: longitude };
+      this.lastGeocodeCoords = { lat: latitude, lon: longitude };
       this.cachedAddress = await this.reverseGeocode(latitude, longitude);
     }
 
-    this.addressEl.textContent = this.cachedAddress || 'Fetching address...';
+    this.addressEl.textContent = this.cachedAddress || 'Location active';
 
-    // Broadcast live update to Firebase
+    // Upload to Firebase gps/live node immediately
     try {
-      await gpsService.updateGPSData({
+      await gpsService.writeLiveGPS({
         latitude,
         longitude,
         accuracy,
-        speed: speed || 0,
-        formattedAddress: this.cachedAddress,
-        timestamp: Date.now()
+        address: this.cachedAddress,
+        date: localDateStr,
+        time: localTimeStr,
+        timestamp: now
       });
-      this.setStatus('Live streaming to OBS via Firebase...', 'active');
+      this.setStatus('Broadcasting live to OBS via Firebase...', 'active');
     } catch (err) {
-      this.setStatus('Firebase sync error: ' + err.message, 'error');
+      this.setStatus('Firebase Connection Lost - Retrying...', 'pending');
     }
   }
 
@@ -83,11 +109,11 @@ class PhoneTransmitter {
     }
   }
 
-  handleLocationError(err) {
+  handleGPSError(err) {
     if (err.code === err.PERMISSION_DENIED) {
       this.setStatus('Location permission denied on phone.', 'error');
     } else {
-      this.setStatus('Waiting for GPS signal on phone...', 'pending');
+      this.setStatus('Waiting for GPS signal... Retrying...', 'pending');
     }
   }
 

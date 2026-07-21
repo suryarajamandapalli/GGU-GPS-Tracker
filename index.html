@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GGU GPS OBS Overlay</title>
-    <meta name="description" content="OBS Studio Live GPS Transparent Browser Source Overlay powered by Firebase." />
+    <meta name="description" content="Professional OBS Studio Live GPS Transparent Browser Source Overlay." />
     <!-- Google Font Figtree -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -57,7 +57,7 @@
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
-        margin-bottom: 36px;
+        margin-bottom: 32px;
       }
 
       .content-list {
@@ -65,7 +65,7 @@
         flex-direction: column;
         align-items: center;
         width: 100%;
-        gap: 28px;
+        gap: 24px;
       }
 
       .info-item {
@@ -115,10 +115,10 @@
   </head>
   <body>
     <div id="root">
-      <div className="container">
+      <div class="container">
         <h1 class="logo">GGU</h1>
 
-        <div id="status-message" class="status-message">Waiting for GPS...</div>
+        <div id="status-message" class="status-message">Waiting for Phone...</div>
 
         <div id="content-list" class="content-list" style="display: none;">
           <div class="info-item">
@@ -140,10 +140,16 @@
             <div class="label">Time :</div>
             <div id="time-val" class="value">--</div>
           </div>
+
+          <div class="info-item">
+            <div class="label">Date :</div>
+            <div id="date-val" class="value">--</div>
+          </div>
         </div>
       </div>
     </div>
 
+    <!-- THIS PAGE NEVER CALLS NAVIGATOR.GEOLOCATION -->
     <script type="module" src="./overlay.js"></script>
   </body>
 </html>

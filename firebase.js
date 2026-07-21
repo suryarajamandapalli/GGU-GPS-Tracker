@@ -1,10 +1,8 @@
 import { firebaseConfig } from './config.js';
 
-// Firebase Realtime Database Service for sub-second OBS streaming
 class FirebaseGPSService {
   constructor() {
     this.db = null;
-    this.isInitialized = false;
     this.init();
   }
 
@@ -14,49 +12,44 @@ class FirebaseGPSService {
         window.firebase.initializeApp(firebaseConfig);
       }
       this.db = window.firebase.database();
-      this.isInitialized = true;
     }
   }
 
-  // Called by Phone client to broadcast live GPS coordinates
-  async updateGPSData(data) {
+  // Write live GPS payload under `gps/live` node
+  async writeLiveGPS(data) {
     if (!this.db) this.init();
     if (!this.db) throw new Error("Firebase DB not initialized");
 
     const payload = {
-      latitude: data.latitude,
-      longitude: data.longitude,
-      formattedAddress: data.formattedAddress || "",
-      accuracy: data.accuracy || 0,
-      speed: data.speed || 0,
+      latitude: Number(data.latitude),
+      longitude: Number(data.longitude),
+      address: data.address || "",
+      accuracy: Number(data.accuracy || 0),
+      date: data.date,
+      time: data.time,
       timestamp: data.timestamp || Date.now(),
-      updatedAt: window.firebase.database.ServerValue.TIMESTAMP
+      lastUpdated: window.firebase.database.ServerValue.TIMESTAMP
     };
 
-    return this.db.ref('liveGPS').set(payload);
+    return this.db.ref('gps/live').set(payload);
   }
 
-  // Called by OBS Overlay client to listen for real-time changes
-  subscribeToGPSData(onData, onError) {
+  // Realtime subscription to `gps/live` node for OBS Overlay
+  listenLiveGPS(onUpdate, onError) {
     if (!this.db) this.init();
     if (!this.db) {
-      if (onError) onError(new Error("Firebase DB unavailable"));
+      if (onError) onError(new Error("Firebase unavailable"));
       return () => {};
     }
 
-    const gpsRef = this.db.ref('liveGPS');
-    const callback = (snapshot) => {
-      if (snapshot.exists()) {
-        onData(snapshot.val());
-      } else {
-        onData(null);
-      }
+    const liveRef = this.db.ref('gps/live');
+    const handleValue = (snapshot) => {
+      onUpdate(snapshot.exists() ? snapshot.val() : null);
     };
 
-    gpsRef.on('value', callback, onError);
+    liveRef.on('value', handleValue, onError);
 
-    // Return unsubscribe function
-    return () => gpsRef.off('value', callback);
+    return () => liveRef.off('value', handleValue);
   }
 }
 
