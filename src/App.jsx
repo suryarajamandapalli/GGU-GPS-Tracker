@@ -26,6 +26,7 @@ export default function App() {
   const [lon, setLon] = useState(null);
   const [time, setTime] = useState(() => getTime(new Date()));
   const [date, setDate] = useState(() => getDate(new Date()));
+  const [isLiveGPS, setIsLiveGPS] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const latRef = useRef(null);
@@ -42,29 +43,31 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
 
-  // Auto-fetch location WITHOUT requiring browser permission prompt
   useEffect(() => {
     let isMounted = true;
 
+    // 1. Instant IP Location Fetch (No permission prompt required)
     const fetchIPLocation = async () => {
       try {
         const res = await fetch('https://freeipapi.com/api/json');
         const data = await res.json();
         if (isMounted && data && data.latitude && data.longitude) {
-          setLat(data.latitude);
-          setLon(data.longitude);
-          setLoading(false);
-          return;
+          if (prevCoords.current.lat === null) {
+            setLat(data.latitude);
+            setLon(data.longitude);
+            setLoading(false);
+          }
         }
       } catch (e) {
         try {
           const res2 = await fetch('https://ipapi.co/json/');
           const data2 = await res2.json();
           if (isMounted && data2 && data2.latitude && data2.longitude) {
-            setLat(data2.latitude);
-            setLon(data2.longitude);
-            setLoading(false);
-            return;
+            if (prevCoords.current.lat === null) {
+              setLat(data2.latitude);
+              setLon(data2.longitude);
+              setLoading(false);
+            }
           }
         } catch (err) {}
       }
@@ -72,8 +75,9 @@ export default function App() {
 
     fetchIPLocation();
 
+    // 2. Hardware GPS Movement Stream (Updates as device moves when allowed)
     if (navigator.geolocation) {
-      const updatePosition = (position) => {
+      const updateGPSPosition = (position) => {
         if (!position || !position.coords) return;
         const newLat = position.coords.latitude;
         const newLon = position.coords.longitude;
@@ -86,18 +90,25 @@ export default function App() {
 
         setLat(newLat);
         setLon(newLon);
+        setIsLiveGPS(true);
         setLoading(false);
       };
 
-      const watchId = navigator.geolocation.watchPosition(updatePosition, () => {}, {
+      const options = {
         enableHighAccuracy: true,
         maximumAge: 0,
         timeout: 10000,
-      });
+      };
+
+      const watchId = navigator.geolocation.watchPosition(updateGPSPosition, () => {}, options);
+      const pollId = setInterval(() => {
+        navigator.geolocation.getCurrentPosition(updateGPSPosition, () => {}, options);
+      }, 1000);
 
       return () => {
         isMounted = false;
         navigator.geolocation.clearWatch(watchId);
+        clearInterval(pollId);
       };
     }
 
@@ -142,6 +153,11 @@ export default function App() {
             <div className="value">{date}</div>
           </div>
         </div>
+      </div>
+
+      <div className="source-badge">
+        <span className={`source-dot ${isLiveGPS ? 'gps' : ''}`}></span>
+        {isLiveGPS ? 'LIVE HARDWARE GPS MOVEMENT ACTIVE' : 'NETWORK IP LOCATION (ALLOW PERMISSION FOR LIVE MOVEMENT)'}
       </div>
     </div>
   );
